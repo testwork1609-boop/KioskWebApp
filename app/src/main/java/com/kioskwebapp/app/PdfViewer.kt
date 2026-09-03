@@ -7,6 +7,12 @@ import android.os.ParcelFileDescriptor
 import android.webkit.CookieManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,9 +39,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -201,9 +214,8 @@ fun PdfViewerOverlay(pdfUrl: String, onClose: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             items(r.pages) { bitmap ->
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = null,
+                                ZoomablePdfPage(
+                                    bitmap = bitmap,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 4.dp)
@@ -214,5 +226,92 @@ fun PdfViewerOverlay(pdfUrl: String, onClose: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * A single PDF page image that supports pinch-to-zoom and, once zoomed in,
+ * one- or two-finger panning - the same gesture people already know from
+ * photo viewers. Double-tap resets back to fit-width. Zoom is capped
+ * between 1x (fit width) and 5x.
+ *
+ * Single-finger vertical drags at 1x zoom are intentionally left alone so
+ * the surrounding LazyColumn keeps scrolling normally between pages; the
+ * custom gesture detector below only reacts once a second finger is down.
+ */
+@Composable
+private fun ZoomablePdfPage(bitmap: Bitmap, modifier: Modifier = Modifier) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+
+    fun clampOffset(candidate: Offset, currentScale: Float): Offset {
+        if (currentScale <= 1f || containerSize == IntSize.Zero) return Offset.Zero
+        val maxX = (containerSize.width * (currentScale - 1f)) / 2f
+        val maxY = (containerSize.height * (currentScale - 1f)) / 2f
+        return Offset(
+            candidate.x.coerceIn(-maxX, maxX),
+            candidate.y.coerceIn(-maxY, maxY)
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .clipToBounds()
+            .onSizeChanged { containerSize = it }
+            .pointerInput(Unit) {
+                detectPinchZoomPan { _, pan, zoom ->
+                    val newScale = (scale * zoom).coerceIn(1f, 5f)
+                    scale = newScale
+                    offset = clampOffset(offset + pan, newScale)
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = {
+                    scale = 1f
+                    offset = Offset.Zero
+                })
+            }
+    ) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
+        )
+    }
+}
+
+/**
+ * Minimal pinch-zoom + pan detector that only engages once a *second*
+ * finger touches the screen. This deliberately avoids using Compose's
+ * built-in detectTransformGestures, which reacts to single-finger drags
+ * too and would otherwise fight with the LazyColumn's own scrolling.
+ */
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectPinchZoomPan(
+    onGesture: (centroid: Offset, pan: Offset, zoom: Float) -> Unit
+) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        do {
+            val event = awaitPointerEvent()
+            if (event.changes.size >= 2) {
+                val zoomChange = event.calculateZoom()
+                val panChange = event.calculatePan()
+                val centroid = event.calculateCentroid()
+                if (zoomChange != 1f || panChange != Offset.Zero) {
+                    onGesture(centroid, panChange, zoomChange)
+                }
+                event.changes.forEach { change ->
+                    if (change.positionChanged()) change.consume()
+                }
+            }
+        } while (event.changes.any { it.pressed })
     }
 }
