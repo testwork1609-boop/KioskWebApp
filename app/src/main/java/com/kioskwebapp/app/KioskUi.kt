@@ -73,8 +73,15 @@ fun KioskApp(
 
     if (!configured) {
         SetupWizard(
-            onFinished = { urlPriorytety, urlPrzeglady, password, refreshMinutes ->
-                prefsManager.saveConfiguration(urlPriorytety, urlPrzeglady, password, refreshMinutes)
+            onFinished = { urlPriorytety, urlPrzeglady, password, przegladyLogin, przegladyPassword, refreshMinutes ->
+                prefsManager.saveConfiguration(
+                    urlPriorytety,
+                    urlPrzeglady,
+                    password,
+                    przegladyLogin,
+                    przegladyPassword,
+                    refreshMinutes
+                )
                 configured = true
             }
         )
@@ -120,12 +127,24 @@ private fun isValidUrl(url: String): Boolean {
 }
 
 @Composable
-fun SetupWizard(onFinished: (urlPriorytety: String, urlPrzeglady: String, password: String, refreshMinutes: Int) -> Unit) {
+fun SetupWizard(
+    onFinished: (
+        urlPriorytety: String,
+        urlPrzeglady: String,
+        password: String,
+        przegladyLogin: String,
+        przegladyPassword: String,
+        refreshMinutes: Int
+    ) -> Unit
+) {
     var step by remember { mutableStateOf(1) }
     var urlPriorytety by remember { mutableStateOf("https://") }
     var urlPrzeglady by remember { mutableStateOf("https://") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var przegladyLogin by remember { mutableStateOf("") }
+    var przegladyPassword by remember { mutableStateOf("") }
+    var confirmPrzegladyPassword by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1B2A)) {
@@ -228,6 +247,66 @@ fun SetupWizard(onFinished: (urlPriorytety: String, urlPrzeglady: String, passwo
                 }
 
                 3 -> {
+                    Text("Dane logowania do sekcji Przeglądy", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Użytkownik będzie musiał podać ten login i hasło, aby otworzyć zakładkę \"Przeglądy\".",
+                        color = Color(0xFFAAB4C0),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = przegladyLogin,
+                        onValueChange = { przegladyLogin = it; errorMessage = null },
+                        label = { Text("Login") },
+                        singleLine = true,
+                        colors = wizardFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = przegladyPassword,
+                        onValueChange = { przegladyPassword = it; errorMessage = null },
+                        label = { Text("Hasło") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        colors = wizardFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = confirmPrzegladyPassword,
+                        onValueChange = { confirmPrzegladyPassword = it; errorMessage = null },
+                        label = { Text("Powtórz hasło") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        colors = wizardFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    errorMessage?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = Color(0xFFFF6B6B))
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        OutlinedButton(onClick = { step = 2 }) { Text("Wstecz") }
+                        Button(onClick = {
+                            when {
+                                przegladyLogin.isBlank() -> errorMessage = "Podaj login do sekcji Przeglądy."
+                                przegladyPassword.length < 6 -> errorMessage = "Hasło musi mieć minimum 6 znaków."
+                                przegladyPassword != confirmPrzegladyPassword -> errorMessage = "Hasła nie są takie same."
+                                else -> {
+                                    errorMessage = null
+                                    step = 4
+                                }
+                            }
+                        }) { Text("Dalej") }
+                    }
+                }
+
+                4 -> {
                     Text("Podsumowanie", color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(16.dp))
                     Text("Adres strony - Priorytety:", color = Color(0xFFAAB4C0))
@@ -237,10 +316,14 @@ fun SetupWizard(onFinished: (urlPriorytety: String, urlPrzeglady: String, passwo
                     Text(urlPrzeglady, color = Color.White, style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(12.dp))
                     Text("Hasło administratora: ustawione", color = Color.White)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Dane logowania do Przeglądów: ustawione (login: $przegladyLogin)", color = Color.White)
                     Spacer(Modifier.height(32.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        OutlinedButton(onClick = { step = 2 }) { Text("Wstecz") }
-                        Button(onClick = { onFinished(urlPriorytety, urlPrzeglady, password, 5) }) { Text("Uruchom kiosk") }
+                        OutlinedButton(onClick = { step = 3 }) { Text("Wstecz") }
+                        Button(onClick = {
+                            onFinished(urlPriorytety, urlPrzeglady, password, przegladyLogin, przegladyPassword, 5)
+                        }) { Text("Uruchom kiosk") }
                     }
                 }
             }
@@ -269,6 +352,10 @@ fun KioskWebScreen(
     var reloadKey by remember { mutableStateOf(0) }
     var refreshMinutes by remember { mutableStateOf(prefsManager.getRefreshIntervalMinutes()) }
     var activeTab by remember { mutableStateOf(KioskTab.PRIORYTETY) }
+    var pdfUrlToShow by remember { mutableStateOf<String?>(null) }
+    var przegladyAuthenticated by remember { mutableStateOf(false) }
+    var showPrzegladyLogin by remember { mutableStateOf(false) }
+    var przegladyLoginError by remember { mutableStateOf<String?>(null) }
 
     var cornerTapTimestamps = remember { mutableStateOf(listOf<Long>()) }
     var showAdminLogin by remember { mutableStateOf(false) }
@@ -340,8 +427,13 @@ fun KioskWebScreen(
                 modifier = Modifier.weight(1f).fillMaxHeight()
             ) {
                 if (activeTab != KioskTab.PRZEGLADY) {
-                    activeTab = KioskTab.PRZEGLADY
-                    webViewRef?.loadUrl(prefsManager.getUrlPrzeglady())
+                    if (przegladyAuthenticated) {
+                        activeTab = KioskTab.PRZEGLADY
+                        webViewRef?.loadUrl(prefsManager.getUrlPrzeglady())
+                    } else {
+                        przegladyLoginError = null
+                        showPrzegladyLogin = true
+                    }
                 }
             }
         }
@@ -360,6 +452,8 @@ fun KioskWebScreen(
                         settings.setSupportZoom(false)
                         settings.builtInZoomControls = false
                         settings.mediaPlaybackRequiresUserGesture = false
+                        settings.setSupportMultipleWindows(true)
+                        settings.javaScriptCanOpenWindowsAutomatically = true
                         android.webkit.CookieManager.getInstance().setAcceptCookie(true)
                         android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -376,6 +470,66 @@ fun KioskWebScreen(
                                 if (request?.isForMainFrame == true) {
                                     hasLoadError = true
                                 }
+                            }
+
+                            // A PDF link tapped directly (not opened in a new
+                            // window) - open it in the native viewer instead
+                            // of letting WebView try (and silently fail) to
+                            // render it inline.
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): Boolean {
+                                val requestUrl = request?.url?.toString() ?: return false
+                                return if (looksLikePdfUrl(requestUrl)) {
+                                    pdfUrlToShow = requestUrl
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                        }
+
+                        // Many "view PDF" buttons open the document via
+                        // window.open() / target="_blank", which a plain
+                        // WebView otherwise ignores completely. This catches
+                        // that case and routes PDFs to the native viewer,
+                        // and any other link back into the main WebView.
+                        webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onCreateWindow(
+                                view: WebView?,
+                                isDialog: Boolean,
+                                isUserGesture: Boolean,
+                                resultMsg: android.os.Message?
+                            ): Boolean {
+                                val popup = WebView(ctx)
+                                popup.webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        popupView: WebView?,
+                                        request: WebResourceRequest?
+                                    ): Boolean {
+                                        val requestUrl = request?.url?.toString() ?: return true
+                                        if (looksLikePdfUrl(requestUrl)) {
+                                            pdfUrlToShow = requestUrl
+                                        } else {
+                                            view?.loadUrl(requestUrl)
+                                        }
+                                        return true
+                                    }
+                                }
+                                val transport = resultMsg?.obj as? WebView.WebViewTransport
+                                transport?.webView = popup
+                                resultMsg?.sendToTarget()
+                                return true
+                            }
+                        }
+
+                        // Fallback: some servers trigger a genuine file
+                        // download (Content-Disposition: attachment) rather
+                        // than a normal navigation - catch that too.
+                        setDownloadListener { downloadUrl, _, _, mimetype, _ ->
+                            if (mimetype == "application/pdf" || looksLikePdfUrl(downloadUrl)) {
+                                pdfUrlToShow = downloadUrl
                             }
                         }
 
@@ -440,11 +594,30 @@ fun KioskWebScreen(
         )
     }
 
+    if (showPrzegladyLogin) {
+        PrzegladyLoginDialog(
+            errorMessage = przegladyLoginError,
+            onDismiss = { showPrzegladyLogin = false; przegladyLoginError = null },
+            onSubmit = { login, enteredPassword ->
+                if (prefsManager.checkPrzegladyCredentials(login, enteredPassword)) {
+                    przegladyAuthenticated = true
+                    showPrzegladyLogin = false
+                    przegladyLoginError = null
+                    activeTab = KioskTab.PRZEGLADY
+                    webViewRef?.loadUrl(prefsManager.getUrlPrzeglady())
+                } else {
+                    przegladyLoginError = "Nieprawidłowy login lub hasło."
+                }
+            }
+        )
+    }
+
     if (showAdminPanel) {
         AdminPanel(
             prefsManager = prefsManager,
             currentUrlPriorytety = prefsManager.getUrlPriorytety(),
             currentUrlPrzeglady = prefsManager.getUrlPrzeglady(),
+            currentPrzegladyLogin = prefsManager.getPrzegladyLogin(),
             currentRefreshMinutes = refreshMinutes,
             onClose = { showAdminPanel = false },
             onUrlPriorytetyChanged = { newUrl ->
@@ -456,6 +629,12 @@ fun KioskWebScreen(
                 if (activeTab == KioskTab.PRZEGLADY) webViewRef?.loadUrl(newUrl)
             },
             onPasswordChanged = { newPassword -> prefsManager.updatePassword(newPassword) },
+            onPrzegladyCredentialsChanged = { login, newPassword ->
+                prefsManager.updatePrzegladyCredentials(login, newPassword)
+                // Changing the credentials revokes the current session, so
+                // the new login/password must be entered again next time.
+                przegladyAuthenticated = false
+            },
             onRefreshIntervalChanged = { minutes ->
                 prefsManager.updateRefreshInterval(minutes)
                 refreshMinutes = minutes
@@ -472,6 +651,16 @@ fun KioskWebScreen(
                 showAdminPanel = false
                 onReset()
             }
+        )
+    }
+
+    // Fullscreen PDF viewer - covers everything (including the nav bar)
+    // while a document is open. Tapping "Zamknij" clears the state and
+    // returns to whichever tab (Priorytety / Przeglądy) was active.
+    pdfUrlToShow?.let { url ->
+        PdfViewerOverlay(
+            pdfUrl = url,
+            onClose = { pdfUrlToShow = null }
         )
     }
 }
@@ -532,18 +721,76 @@ fun AdminLoginDialog(
     )
 }
 
-private enum class AdminScreen { MENU, EDIT_URL, EDIT_PASSWORD, EDIT_INTERVAL, CONFIRM_RESET }
+/**
+ * Authentication gate shown when the user taps the "Przeglądy" tab.
+ * Requires a separate login + password (distinct from the admin password),
+ * configured during setup and editable from the admin panel.
+ */
+@Composable
+fun PrzegladyLoginDialog(
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onSubmit: (login: String, password: String) -> Unit
+) {
+    var login by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Logowanie - Przeglądy") },
+        text = {
+            Column {
+                Text(
+                    "Podaj login i hasło, aby uzyskać dostęp do sekcji Przeglądy.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = login,
+                    onValueChange = { login = it },
+                    label = { Text("Login") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Hasło") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                errorMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = Color(0xFFB00020))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSubmit(login, password) }) { Text("Zaloguj") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Anuluj") }
+        }
+    )
+}
+
+private enum class AdminScreen { MENU, EDIT_URL, EDIT_PASSWORD, EDIT_PRZEGLADY_LOGIN, EDIT_INTERVAL, CONFIRM_RESET }
 
 @Composable
 fun AdminPanel(
     prefsManager: PrefsManager,
     currentUrlPriorytety: String,
     currentUrlPrzeglady: String,
+    currentPrzegladyLogin: String,
     currentRefreshMinutes: Int,
     onClose: () -> Unit,
     onUrlPriorytetyChanged: (String) -> Unit,
     onUrlPrzegladyChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
+    onPrzegladyCredentialsChanged: (login: String, password: String) -> Unit,
     onRefreshIntervalChanged: (Int) -> Unit,
     onReloadPage: () -> Unit,
     onExitKiosk: () -> Unit,
@@ -560,6 +807,11 @@ fun AdminPanel(
     var confirmNewPassword by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf<String?>(null) }
 
+    var newPrzegladyLogin by remember { mutableStateOf(currentPrzegladyLogin) }
+    var newPrzegladyPassword by remember { mutableStateOf("") }
+    var confirmNewPrzegladyPassword by remember { mutableStateOf("") }
+    var przegladyCredentialsError by remember { mutableStateOf<String?>(null) }
+
     var intervalText by remember { mutableStateOf(currentRefreshMinutes.toString()) }
     var intervalError by remember { mutableStateOf<String?>(null) }
 
@@ -572,6 +824,7 @@ fun AdminPanel(
                     AdminScreen.MENU -> {
                         AdminMenuButton("Zmień adresy stron") { screen = AdminScreen.EDIT_URL }
                         AdminMenuButton("Zmień hasło") { screen = AdminScreen.EDIT_PASSWORD }
+                        AdminMenuButton("Zmień dane logowania - Przeglądy") { screen = AdminScreen.EDIT_PRZEGLADY_LOGIN }
                         AdminMenuButton("Ustaw interwał odświeżania") { screen = AdminScreen.EDIT_INTERVAL }
                         AdminMenuButton("Przeładuj stronę") { onReloadPage(); onClose() }
                         AdminMenuButton("Wyjdź z Kiosk Mode") { onExitKiosk() }
@@ -651,6 +904,54 @@ fun AdminPanel(
                                     newPassword != confirmNewPassword -> passwordError = "Hasła nie są takie same."
                                     else -> {
                                         onPasswordChanged(newPassword)
+                                        onClose()
+                                    }
+                                }
+                            }) { Text("Zapisz") }
+                        }
+                    }
+
+                    AdminScreen.EDIT_PRZEGLADY_LOGIN -> {
+                        Text("Dane logowania do sekcji Przeglądy")
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = newPrzegladyLogin,
+                            onValueChange = { newPrzegladyLogin = it; przegladyCredentialsError = null },
+                            label = { Text("Login") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = newPrzegladyPassword,
+                            onValueChange = { newPrzegladyPassword = it; przegladyCredentialsError = null },
+                            label = { Text("Nowe hasło") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = confirmNewPrzegladyPassword,
+                            onValueChange = { confirmNewPrzegladyPassword = it; przegladyCredentialsError = null },
+                            label = { Text("Powtórz hasło") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        przegladyCredentialsError?.let { Text(it, color = Color(0xFFB00020)) }
+                        Spacer(Modifier.height(16.dp))
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            TextButton(onClick = { screen = AdminScreen.MENU }) { Text("Wstecz") }
+                            Button(onClick = {
+                                when {
+                                    newPrzegladyLogin.isBlank() -> przegladyCredentialsError = "Podaj login."
+                                    newPrzegladyPassword.length < 6 -> przegladyCredentialsError = "Hasło musi mieć minimum 6 znaków."
+                                    newPrzegladyPassword != confirmNewPrzegladyPassword -> przegladyCredentialsError = "Hasła nie są takie same."
+                                    else -> {
+                                        onPrzegladyCredentialsChanged(newPrzegladyLogin, newPrzegladyPassword)
                                         onClose()
                                     }
                                 }

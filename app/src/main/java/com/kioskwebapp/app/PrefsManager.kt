@@ -41,17 +41,43 @@ class PrefsManager(context: Context) {
         urlPriorytety: String,
         urlPrzeglady: String,
         password: String,
+        przegladyLogin: String,
+        przegladyPassword: String,
         refreshMinutes: Int = 5
     ) {
         val salt = generateSalt()
         val hash = hashPassword(password, salt)
+        val przegladySalt = generateSalt()
+        val przegladyHash = hashPassword(przegladyPassword, przegladySalt)
         prefs.edit()
             .putString(KEY_URL_PRIORYTETY, urlPriorytety)
             .putString(KEY_URL_PRZEGLADY, urlPrzeglady)
             .putString(KEY_PASSWORD_SALT, salt)
             .putString(KEY_PASSWORD_HASH, hash)
+            .putString(KEY_PRZEGLADY_LOGIN, przegladyLogin)
+            .putString(KEY_PRZEGLADY_PASSWORD_SALT, przegladySalt)
+            .putString(KEY_PRZEGLADY_PASSWORD_HASH, przegladyHash)
             .putInt(KEY_REFRESH_MINUTES, refreshMinutes)
             .putBoolean(KEY_CONFIGURED, true)
+            .apply()
+    }
+
+    fun getPrzegladyLogin(): String = prefs.getString(KEY_PRZEGLADY_LOGIN, "") ?: ""
+
+    fun checkPrzegladyCredentials(login: String, password: String): Boolean {
+        val storedLogin = prefs.getString(KEY_PRZEGLADY_LOGIN, null) ?: return false
+        val salt = prefs.getString(KEY_PRZEGLADY_PASSWORD_SALT, null) ?: return false
+        val storedHash = prefs.getString(KEY_PRZEGLADY_PASSWORD_HASH, null) ?: return false
+        return login == storedLogin && hashPassword(password, salt) == storedHash
+    }
+
+    fun updatePrzegladyCredentials(login: String, password: String) {
+        val salt = generateSalt()
+        val hash = hashPassword(password, salt)
+        prefs.edit()
+            .putString(KEY_PRZEGLADY_LOGIN, login)
+            .putString(KEY_PRZEGLADY_PASSWORD_SALT, salt)
+            .putString(KEY_PRZEGLADY_PASSWORD_HASH, hash)
             .apply()
     }
 
@@ -105,6 +131,9 @@ class PrefsManager(context: Context) {
         private const val KEY_URL_PRZEGLADY = "url_przeglady"
         private const val KEY_PASSWORD_HASH = "password_hash"
         private const val KEY_PASSWORD_SALT = "password_salt"
+        private const val KEY_PRZEGLADY_LOGIN = "przeglady_login"
+        private const val KEY_PRZEGLADY_PASSWORD_HASH = "przeglady_password_hash"
+        private const val KEY_PRZEGLADY_PASSWORD_SALT = "przeglady_password_salt"
         private const val KEY_REFRESH_MINUTES = "refresh_minutes"
     }
 }
