@@ -8,9 +8,12 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * Handles secure, persistent storage of the kiosk configuration:
- * target URL, admin password (hashed, never stored in plain text),
+ * Handles secure, persistent storage of the kiosk configuration: admin
+ * password and Przeglądy login (both hashed, never stored in plain text),
  * and the auto-refresh interval.
+ *
+ * The two target URLs are NOT stored here anymore - they are fixed at
+ * build time in KioskConfig.kt.
  *
  * Backed by EncryptedSharedPreferences, which uses an Android Keystore
  * generated key to encrypt both keys and values on disk.
@@ -31,15 +34,14 @@ class PrefsManager(context: Context) {
 
     fun isConfigured(): Boolean = prefs.getBoolean(KEY_CONFIGURED, false)
 
-    fun getUrlPriorytety(): String = prefs.getString(KEY_URL_PRIORYTETY, "") ?: ""
+    // Fixed at build time - see KioskConfig.kt.
+    fun getUrlPriorytety(): String = KioskConfig.URL_PRIORYTETY
 
-    fun getUrlPrzeglady(): String = prefs.getString(KEY_URL_PRZEGLADY, "") ?: ""
+    fun getUrlPrzeglady(): String = KioskConfig.URL_PRZEGLADY
 
     fun getRefreshIntervalMinutes(): Int = prefs.getInt(KEY_REFRESH_MINUTES, 5)
 
     fun saveConfiguration(
-        urlPriorytety: String,
-        urlPrzeglady: String,
         password: String,
         przegladyLogin: String,
         przegladyPassword: String,
@@ -50,8 +52,6 @@ class PrefsManager(context: Context) {
         val przegladySalt = generateSalt()
         val przegladyHash = hashPassword(przegladyPassword, przegladySalt)
         prefs.edit()
-            .putString(KEY_URL_PRIORYTETY, urlPriorytety)
-            .putString(KEY_URL_PRZEGLADY, urlPrzeglady)
             .putString(KEY_PASSWORD_SALT, salt)
             .putString(KEY_PASSWORD_HASH, hash)
             .putString(KEY_PRZEGLADY_LOGIN, przegladyLogin)
@@ -79,14 +79,6 @@ class PrefsManager(context: Context) {
             .putString(KEY_PRZEGLADY_PASSWORD_SALT, salt)
             .putString(KEY_PRZEGLADY_PASSWORD_HASH, hash)
             .apply()
-    }
-
-    fun updateUrlPriorytety(url: String) {
-        prefs.edit().putString(KEY_URL_PRIORYTETY, url).apply()
-    }
-
-    fun updateUrlPrzeglady(url: String) {
-        prefs.edit().putString(KEY_URL_PRZEGLADY, url).apply()
     }
 
     fun updatePassword(newPassword: String) {
@@ -127,8 +119,6 @@ class PrefsManager(context: Context) {
 
     companion object {
         private const val KEY_CONFIGURED = "configured"
-        private const val KEY_URL_PRIORYTETY = "url_priorytety"
-        private const val KEY_URL_PRZEGLADY = "url_przeglady"
         private const val KEY_PASSWORD_HASH = "password_hash"
         private const val KEY_PASSWORD_SALT = "password_salt"
         private const val KEY_PRZEGLADY_LOGIN = "przeglady_login"

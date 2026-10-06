@@ -65,18 +65,14 @@ private enum class KioskTab { PRIORYTETY, PRZEGLADY }
 fun KioskApp(
     prefsManager: PrefsManager,
     connectivityManager: ConnectivityManager,
-    enterLockTask: () -> Unit,
-    exitLockTask: () -> Unit,
     restartApp: () -> Unit
 ) {
     var configured by remember { mutableStateOf(prefsManager.isConfigured()) }
 
     if (!configured) {
         SetupWizard(
-            onFinished = { urlPriorytety, urlPrzeglady, password, przegladyLogin, przegladyPassword, refreshMinutes ->
+            onFinished = { password, przegladyLogin, przegladyPassword, refreshMinutes ->
                 prefsManager.saveConfiguration(
-                    urlPriorytety,
-                    urlPrzeglady,
                     password,
                     przegladyLogin,
                     przegladyPassword,
@@ -89,8 +85,6 @@ fun KioskApp(
         KioskWebScreen(
             prefsManager = prefsManager,
             connectivityManager = connectivityManager,
-            enterLockTask = enterLockTask,
-            exitLockTask = exitLockTask,
             restartApp = restartApp,
             onReset = { configured = false }
         )
@@ -121,16 +115,9 @@ private fun wizardFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedContainerColor = Color.Transparent
 )
 
-private fun isValidUrl(url: String): Boolean {
-    return (url.startsWith("https://") || url.startsWith("http://")) && url.length > 10 &&
-        url.substringAfter("://").contains(".")
-}
-
 @Composable
 fun SetupWizard(
     onFinished: (
-        urlPriorytety: String,
-        urlPrzeglady: String,
         password: String,
         przegladyLogin: String,
         przegladyPassword: String,
@@ -138,8 +125,6 @@ fun SetupWizard(
     ) -> Unit
 ) {
     var step by remember { mutableStateOf(1) }
-    var urlPriorytety by remember { mutableStateOf("https://") }
-    var urlPrzeglady by remember { mutableStateOf("https://") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var przegladyLogin by remember { mutableStateOf("") }
@@ -161,48 +146,6 @@ fun SetupWizard(
 
             when (step) {
                 1 -> {
-                    Text("Adres strony - Priorytety", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = urlPriorytety,
-                        onValueChange = { urlPriorytety = it; errorMessage = null },
-                        placeholder = { Text("https://priorytety.example.com") },
-                        singleLine = true,
-                        colors = wizardFieldColors(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    Text("Adres strony - Przeglądy", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = urlPrzeglady,
-                        onValueChange = { urlPrzeglady = it; errorMessage = null },
-                        placeholder = { Text("https://przeglady.example.com") },
-                        singleLine = true,
-                        colors = wizardFieldColors(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    errorMessage?.let {
-                        Spacer(Modifier.height(8.dp))
-                        Text(it, color = Color(0xFFFF6B6B))
-                    }
-                    Spacer(Modifier.height(24.dp))
-                    Button(
-                        onClick = {
-                            when {
-                                !isValidUrl(urlPriorytety) -> errorMessage = "Podaj poprawny adres URL dla Priorytetów."
-                                !isValidUrl(urlPrzeglady) -> errorMessage = "Podaj poprawny adres URL dla Przeglądów."
-                                else -> {
-                                    errorMessage = null
-                                    step = 2
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Dalej") }
-                }
-
-                2 -> {
                     Text("Ustaw hasło administratora", color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
@@ -231,22 +174,22 @@ fun SetupWizard(
                         Text(it, color = Color(0xFFFF6B6B))
                     }
                     Spacer(Modifier.height(24.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        OutlinedButton(onClick = { step = 1 }) { Text("Wstecz") }
-                        Button(onClick = {
+                    Button(
+                        onClick = {
                             when {
                                 password.length < 6 -> errorMessage = "Hasło musi mieć minimum 6 znaków."
                                 password != confirmPassword -> errorMessage = "Hasła nie są takie same."
                                 else -> {
                                     errorMessage = null
-                                    step = 3
+                                    step = 2
                                 }
                             }
-                        }) { Text("Dalej") }
-                    }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Dalej") }
                 }
 
-                3 -> {
+                2 -> {
                     Text("Dane logowania do sekcji Przeglądy", color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -291,7 +234,7 @@ fun SetupWizard(
                     }
                     Spacer(Modifier.height(24.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        OutlinedButton(onClick = { step = 2 }) { Text("Wstecz") }
+                        OutlinedButton(onClick = { step = 1 }) { Text("Wstecz") }
                         Button(onClick = {
                             when {
                                 przegladyLogin.isBlank() -> errorMessage = "Podaj login do sekcji Przeglądy."
@@ -299,30 +242,24 @@ fun SetupWizard(
                                 przegladyPassword != confirmPrzegladyPassword -> errorMessage = "Hasła nie są takie same."
                                 else -> {
                                     errorMessage = null
-                                    step = 4
+                                    step = 3
                                 }
                             }
                         }) { Text("Dalej") }
                     }
                 }
 
-                4 -> {
+                3 -> {
                     Text("Podsumowanie", color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(16.dp))
-                    Text("Adres strony - Priorytety:", color = Color(0xFFAAB4C0))
-                    Text(urlPriorytety, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(12.dp))
-                    Text("Adres strony - Przeglądy:", color = Color(0xFFAAB4C0))
-                    Text(urlPrzeglady, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(12.dp))
                     Text("Hasło administratora: ustawione", color = Color.White)
                     Spacer(Modifier.height(8.dp))
                     Text("Dane logowania do Przeglądów: ustawione (login: $przegladyLogin)", color = Color.White)
                     Spacer(Modifier.height(32.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        OutlinedButton(onClick = { step = 3 }) { Text("Wstecz") }
+                        OutlinedButton(onClick = { step = 2 }) { Text("Wstecz") }
                         Button(onClick = {
-                            onFinished(urlPriorytety, urlPrzeglady, password, przegladyLogin, przegladyPassword, 5)
+                            onFinished(password, przegladyLogin, przegladyPassword, 5)
                         }) { Text("Uruchom kiosk") }
                     }
                 }
@@ -340,8 +277,6 @@ fun SetupWizard(
 fun KioskWebScreen(
     prefsManager: PrefsManager,
     connectivityManager: ConnectivityManager,
-    enterLockTask: () -> Unit,
-    exitLockTask: () -> Unit,
     restartApp: () -> Unit,
     onReset: () -> Unit
 ) {
@@ -361,9 +296,6 @@ fun KioskWebScreen(
     var showAdminLogin by remember { mutableStateOf(false) }
     var showAdminPanel by remember { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
-
-    // Enter Lock Task once the kiosk screen appears.
-    LaunchedEffect(Unit) { enterLockTask() }
 
     // Monitor connectivity continuously.
     DisposableEffect(connectivityManager) {
@@ -615,19 +547,9 @@ fun KioskWebScreen(
     if (showAdminPanel) {
         AdminPanel(
             prefsManager = prefsManager,
-            currentUrlPriorytety = prefsManager.getUrlPriorytety(),
-            currentUrlPrzeglady = prefsManager.getUrlPrzeglady(),
             currentPrzegladyLogin = prefsManager.getPrzegladyLogin(),
             currentRefreshMinutes = refreshMinutes,
             onClose = { showAdminPanel = false },
-            onUrlPriorytetyChanged = { newUrl ->
-                prefsManager.updateUrlPriorytety(newUrl)
-                if (activeTab == KioskTab.PRIORYTETY) webViewRef?.loadUrl(newUrl)
-            },
-            onUrlPrzegladyChanged = { newUrl ->
-                prefsManager.updateUrlPrzeglady(newUrl)
-                if (activeTab == KioskTab.PRZEGLADY) webViewRef?.loadUrl(newUrl)
-            },
             onPasswordChanged = { newPassword -> prefsManager.updatePassword(newPassword) },
             onPrzegladyCredentialsChanged = { login, newPassword ->
                 prefsManager.updatePrzegladyCredentials(login, newPassword)
@@ -640,13 +562,8 @@ fun KioskWebScreen(
                 refreshMinutes = minutes
             },
             onReloadPage = { webViewRef?.reload() },
-            onExitKiosk = {
-                exitLockTask()
-                showAdminPanel = false
-            },
             onRestartApp = { restartApp() },
             onResetConfiguration = {
-                exitLockTask()
                 prefsManager.resetConfiguration()
                 showAdminPanel = false
                 onReset()
@@ -777,31 +694,22 @@ fun PrzegladyLoginDialog(
     )
 }
 
-private enum class AdminScreen { MENU, EDIT_URL, EDIT_PASSWORD, EDIT_PRZEGLADY_LOGIN, EDIT_INTERVAL, CONFIRM_RESET }
+private enum class AdminScreen { MENU, EDIT_PASSWORD, EDIT_PRZEGLADY_LOGIN, EDIT_INTERVAL, CONFIRM_RESET }
 
 @Composable
 fun AdminPanel(
     prefsManager: PrefsManager,
-    currentUrlPriorytety: String,
-    currentUrlPrzeglady: String,
     currentPrzegladyLogin: String,
     currentRefreshMinutes: Int,
     onClose: () -> Unit,
-    onUrlPriorytetyChanged: (String) -> Unit,
-    onUrlPrzegladyChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onPrzegladyCredentialsChanged: (login: String, password: String) -> Unit,
     onRefreshIntervalChanged: (Int) -> Unit,
     onReloadPage: () -> Unit,
-    onExitKiosk: () -> Unit,
     onRestartApp: () -> Unit,
     onResetConfiguration: () -> Unit
 ) {
     var screen by remember { mutableStateOf(AdminScreen.MENU) }
-
-    var newUrlPriorytety by remember { mutableStateOf(currentUrlPriorytety) }
-    var newUrlPrzeglady by remember { mutableStateOf(currentUrlPrzeglady) }
-    var urlError by remember { mutableStateOf<String?>(null) }
 
     var newPassword by remember { mutableStateOf("") }
     var confirmNewPassword by remember { mutableStateOf("") }
@@ -822,54 +730,13 @@ fun AdminPanel(
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 when (screen) {
                     AdminScreen.MENU -> {
-                        AdminMenuButton("Zmień adresy stron") { screen = AdminScreen.EDIT_URL }
                         AdminMenuButton("Zmień hasło") { screen = AdminScreen.EDIT_PASSWORD }
                         AdminMenuButton("Zmień dane logowania - Przeglądy") { screen = AdminScreen.EDIT_PRZEGLADY_LOGIN }
                         AdminMenuButton("Ustaw interwał odświeżania") { screen = AdminScreen.EDIT_INTERVAL }
                         AdminMenuButton("Przeładuj stronę") { onReloadPage(); onClose() }
-                        AdminMenuButton("Wyjdź z Kiosk Mode") { onExitKiosk() }
                         AdminMenuButton("Uruchom ponownie aplikację") { onRestartApp() }
                         Divider(modifier = Modifier.padding(vertical = 8.dp))
                         AdminMenuButton("Resetuj konfigurację", danger = true) { screen = AdminScreen.CONFIRM_RESET }
-                    }
-
-                    AdminScreen.EDIT_URL -> {
-                        Text("Adres strony - Priorytety")
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = newUrlPriorytety,
-                            onValueChange = { newUrlPriorytety = it; urlError = null },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text("Adres strony - Przeglądy")
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = newUrlPrzeglady,
-                            onValueChange = { newUrlPrzeglady = it; urlError = null },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        urlError?.let {
-                            Spacer(Modifier.height(8.dp))
-                            Text(it, color = Color(0xFFB00020))
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            TextButton(onClick = { screen = AdminScreen.MENU }) { Text("Wstecz") }
-                            Button(onClick = {
-                                when {
-                                    !isValidUrl(newUrlPriorytety) -> urlError = "Podaj poprawny adres URL dla Priorytetów."
-                                    !isValidUrl(newUrlPrzeglady) -> urlError = "Podaj poprawny adres URL dla Przeglądów."
-                                    else -> {
-                                        onUrlPriorytetyChanged(newUrlPriorytety)
-                                        onUrlPrzegladyChanged(newUrlPrzeglady)
-                                        onClose()
-                                    }
-                                }
-                            }) { Text("Zapisz") }
-                        }
                     }
 
                     AdminScreen.EDIT_PASSWORD -> {
@@ -986,7 +853,7 @@ fun AdminPanel(
                     }
 
                     AdminScreen.CONFIRM_RESET -> {
-                        Text("Czy na pewno chcesz zresetować konfigurację? Adres strony i hasło zostaną usunięte, a kreator pierwszego uruchomienia pojawi się ponownie.")
+                        Text("Czy na pewno chcesz zresetować konfigurację? Hasło administratora i dane logowania do Przeglądów zostaną usunięte, a kreator pierwszego uruchomienia pojawi się ponownie.")
                         Spacer(Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                             TextButton(onClick = { screen = AdminScreen.MENU }) { Text("Anuluj") }
