@@ -1,0 +1,2 @@
+const val URL_PRIORYTETY = "https://TWOJA-STRONA-PRIORYTETY.pl"
+const val URL_PRZEGLADY = "https://TWOJA-STRONA-PRZEGLADY.pl"
